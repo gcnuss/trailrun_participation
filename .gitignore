@@ -1,0 +1,5 @@
+data/*.sql
+data/*.zip
+data/*.accdb
+data/log.txt
+ipynb_checkpoints
