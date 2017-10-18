@@ -134,6 +134,8 @@ class trail_dat_prep(object):
         self.clean_dataset.drop('HowHeard', axis=1, inplace=True)
         #Payment method Column
         self.clean_pay_methods()
+        #Contacts Column
+        self.clean_contacts()
 
 
     def get_ages():
@@ -247,3 +249,5 @@ class trail_dat_prep(object):
         dataprep.init_psql_session()
         dataprep.data_coll_query()
         dataprep.create_df()
+        dataprep.col_cleaning()
+        cleaned_df = dataprep.clean_dataset
