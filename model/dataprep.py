@@ -1,9 +1,9 @@
 import psycopg2
-import pandas as import pd
+import pandas as pd
 import numpy as np
 from collections import defaultdict
 
-class trail_dat_prep(object):
+class TrailDataPrep(object):
     '''This class initiates a psycopg2 session to connect to the postgres db
     containing all of the data, runs a query to create a single set of results
     containing all columns to be used from modeling across several tables in the
@@ -25,16 +25,17 @@ class trail_dat_prep(object):
     def __init__(self, dbname='mergeoruns', host='localhost'):
         self.dbname = dbname
         self.host = host
+        self.cur = None
         self.query_results = None
         self.base_dataset = None
         self.clean_dataset = None
 
-    def init_psql_session():
+    def init_psql_session(self):
         conn = psycopg2.connect(dbname=self.dbname, host=self.host)
-        cur = conn.cursor()
+        self.cur = conn.cursor()
         conn.autocommit = True
 
-    def data_coll_query():
+    def data_coll_query(self):
         '''pre-defined query based on my data review and determination of what
         columns to include; returns a list of records'''
         query = '''
@@ -61,11 +62,11 @@ class trail_dat_prep(object):
             AND mt."EventID" = sstp."EventID"
             LEFT JOIN "Series" s ON mt."SeriesID" = s."SeriesID"
             '''
-        cur.execute(query)
-        self.query_results = cur.fetchall()
+        self.cur.execute(query)
+        self.query_results = self.cur.fetchall()
         return self.query_results
 
-    def create_df(self.query_results):
+    def create_df(self):
         '''creates raw data pandas dataframe with pre-defined columns aligning
         with the query columns included'''
         cols = ["PersonID", "EventID", "Age", "Gender", "Distance", "Miles", "Time",
@@ -77,7 +78,7 @@ class trail_dat_prep(object):
         self.base_dataset = pd.DataFrame(self.query_results, columns = cols)
         return self.base_dataset
 
-    def col_cleaning(self.base_dataset):
+    def col_cleaning(self):
         '''completes initial cleaning on data columns and some basic feature
         engineering; fill na's for columns with missing values; drop old columns
         where new separate columns are created; separate functions called when
@@ -90,16 +91,16 @@ class trail_dat_prep(object):
         self.clean_dataset['Age2'].fillna(value=int(
                                 self.clean_dataset['Age2'].mean()), inplace=True)
         self.clean_dataset = self.clean_dataset.drop('Age', axis=1)
+        #Distance Column
+        self.clean_dataset['Distance'].fillna(value='Variable-SS', inplace=True)
         #Miles Column
         self.get_miles()
-        self.clean_dataset['Miles2'].fillna(value=float(
-                                    self.clean_dataset['Miles2'].mean(),
-                                    decimals=0), inplace=True)
+        self.clean_dataset['Miles2'].fillna(value=round(
+                                    self.clean_dataset['Miles2'].mean(),0),
+                                    inplace=True)
         self.clean_dataset = self.clean_dataset.drop('Miles', axis=1)
         #Gender Column
         self.clean_dataset['Gender'].fillna(value='Other', inplace=True)
-        #Distance Column
-        self.clean_dataset['Distance'].fillna(value='Variable-SS', inplace=True)
         #Time Column
         self.clean_times()
         self.clean_dataset = self.clean_dataset.drop('Time', axis=1)
@@ -138,7 +139,7 @@ class trail_dat_prep(object):
         self.clean_contacts()
 
 
-    def get_ages():
+    def get_ages(self):
         '''find ages for PersonIDs that exist in some records but are missing
         from others; for use in populating missing age values'''
 
@@ -165,18 +166,17 @@ class trail_dat_prep(object):
                                 lambda row: int(row[1]) if pd.notnull(row[1])
                                 else D2_age[row[0]], axis=1)
 
-    def get_miles():
+    def get_miles(self):
         '''identify mileages for Miles column for records that have valid distance
         values but are missing mileage values'''
         dist_dict = {'1/2 Marathon':13., 'Half Marathon early start':13.,
-                    '5k early start':3., '5 Mile late start': 5., '10k early start':6.,
-                    'Half Marathon late start':13., 'Variable-SS':np.NaN}
+        '5k early start':3., '5 Mile late start': 5., '10k early start':6.,
+        'Half Marathon late start':13., 'Variable-SS':np.NaN}
 
         self.clean_dataset['Miles2'] = self.clean_dataset[['Distance', 'Miles']].apply(
-                                    lambda row: row[1] if pd.notnull(row[1])
-                                    else dist_dict[row[0]], axis=1)
+                                    lambda row: row[1] if pd.notnull(row[1]) else dist_dict[row[0]], axis=1)
 
-    def clean_times():
+    def clean_times(self):
         '''Change times for all street scrambles to 90 minutes; note that some
         of these are 3 hr or 2 hr but I don't have the granularity to see that
         in the data right now; follow up item for Dan; also drop records that
@@ -186,11 +186,11 @@ class trail_dat_prep(object):
                                     lambda row: '1:30:00.0' if row[0] > 999
                                     else row[1], axis=1)
         records_to_drop = list(self.clean_dataset[pd.isnull(
-                                    base_dataset['Time2'])].index)
+                                    self.clean_dataset['Time2'])].index)
 
         self.clean_dataset.drop(labels=records_to_drop, inplace=True)
 
-    def clean_pay_methods():
+    def clean_pay_methods(self):
         '''payment methods contains a variety of oddball entries; this function
         buckets down to a handful of useful categories (cash, credit, check,
         paypal, comp, and other); also creates a "has_pay_method" feature to
@@ -228,7 +228,7 @@ class trail_dat_prep(object):
                                     if row[0] == None
                                     else 'Y', axis=1)
 
-    def clean_contacts():
+    def clean_contacts(self):
         '''similar to payment method, the contacts column contains a variety of
         oddball entries; bucketing here to Yes, No, and No Response.  Need to
         follow up with Dan on what the -1 and 0 values mean; for no bucketed in
@@ -244,10 +244,13 @@ class trail_dat_prep(object):
                                         or row[0] == None)
                                         else row[0], axis=1)
 
-    if __name__ == "__main__":
-        dataprep = trail_dat_prep(dbname='mergeoruns101717', host='localhost')
-        dataprep.init_psql_session()
-        dataprep.data_coll_query()
-        dataprep.create_df()
-        dataprep.col_cleaning()
-        cleaned_df = dataprep.clean_dataset
+    def engr_features(self):
+        pass
+
+if __name__ == "__main__":
+    dataprep = TrailDataPrep(dbname='mergeoruns101717', host='localhost')
+    dataprep.init_psql_session()
+    dataprep.data_coll_query()
+    dataprep.create_df()
+    dataprep.col_cleaning()
+    cleaned_df = dataprep.clean_dataset
