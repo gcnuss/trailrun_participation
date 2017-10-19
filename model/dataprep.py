@@ -127,6 +127,7 @@ class TrailDataPrep(object):
         #Hoodie Column
         self.clean_dataset['Hoodie'].fillna(value='N', inplace=True)
         #SeriesID Column
+        self.clean_series_ids()
         self.clean_dataset['HasSeries'] = self.clean_dataset[['SeriesID']].apply(
                                 lambda row: 'Y' if pd.notnull(row[0])
                                 else 'N', axis=1)
@@ -245,6 +246,26 @@ class TrailDataPrep(object):
                                         if (row[0] == '-1' or row[0] == '0'
                                         or row[0] == None)
                                         else row[0], axis=1)
+
+    def clean_series_ids(self):
+        '''SeriesID column has separate series numbers for the same series in
+        different years.  This function makes the series IDs year-independent
+        such that it is only looking at the type of series over multiple years'''
+
+        #align winter series from 2015/2016 and 2016/2017 under ID 1
+        self.clean_dataset['SeriesID'] = self.clean_dataset['SeriesID'].apply(
+                                        lambda x: 1 if x == 4 else x)
+        #align half marathon series from 206 and 2017 under ID 2
+        self.clean_dataset['SeriesID'] = self.clean_dataset['SeriesID'].apply(
+                                        lambda x: 2 if x == 5 else x)
+        #align trail to grill series from 2016 and 2017 under ID 3
+        self.clean_dataset['SeriesID'] = self.clean_dataset['SeriesID'].apply(
+                                        lambda x: 3 if x == 6 else x)
+        #assign a series ID to Street Scrambles, set under ID 4
+        self.clean_dataset['SeriesID'] = self.clean_dataset[[
+                                        'EventType', 'SeriesID']].apply(
+                                        lambda row: 4 if row[0] == 'Street Scramble'
+                                        else row[1])
 
     def engr_features(self):
         pass
