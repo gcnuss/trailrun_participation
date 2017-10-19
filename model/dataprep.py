@@ -44,7 +44,7 @@ class TrailDataPrep(object):
             pe."Registration time", pe."Total fee", pe."Payment method",
             pe."Street Address", pe."City", pe."State/Province", pe."Emergency contact name",
             pe."Zip Code", pe."Country", pe."Contact", pe."Tshirt", pe."Hoodie",
-            e."Event_Date", e."MergeoEvent", e."EventTypeID", se."SeriesID"
+            e."Event_Name", e."Event_Date", e."MergeoEvent", e."EventTypeID", se."SeriesID"
             FROM "PersonEvents" pe
             LEFT JOIN "Events" e ON pe."EventID" = e."EventID"
             LEFT JOIN "SeriesEvents" se ON pe."EventID" = se."EventID")
@@ -52,7 +52,7 @@ class TrailDataPrep(object):
             ds."Miles", mt."Time", mt."Total fee", sstp."Prereg", mt."Registration time",
             mt."Payment method", mt."Street Address", mt."City", mt."State/Province",
             mt."Zip Code", mt."Country", mt."Emergency contact name", mt."Contact",
-            mt."Tshirt", mt."Hoodie", mt."Event_Date", mt."MergeoEvent",
+            mt."Tshirt", mt."Hoodie", mt."Event_Date", mt."Event_Date", mt."MergeoEvent",
             mt."EventTypeID", et."EventType", mt."SeriesID", s."Series", sstp."HowHeard"
             FROM master_temp mt
             LEFT JOIN "DistanceSorts" ds ON LOWER(mt."Distance") = LOWER(ds."Distance")
@@ -72,7 +72,7 @@ class TrailDataPrep(object):
         cols = ["PersonID", "EventID", "Age", "Gender", "Distance", "Miles", "Time",
         "Total fee", "SS_Prereg", "Registration time", "Payment method",
         "Street Address", "City", "State/Province", "Zip Code", "Country",
-        "Emergency contact name", "Contact", "Tshirt", "Hoodie", "Event_Date",
+        "Emergency contact name", "Contact", "Tshirt", "Hoodie", "Event_Name", "Event_Date",
         "MergeoEvent", "EventTypeID", "EventType", "SeriesID", "Series",
         "HowHeard"]
         self.base_dataset = pd.DataFrame(self.query_results, columns = cols)
@@ -85,6 +85,8 @@ class TrailDataPrep(object):
         needed for add'l pre-processing'''
 
         self.clean_dataset = self.base_dataset.copy()
+
+        self.clean_dataset['PersonID'] = self.clean_dataset['PersonID'].apply(lambda x: int(x))
 
         #Age Column
         self.get_ages()
@@ -128,7 +130,7 @@ class TrailDataPrep(object):
         self.clean_dataset['HasSeries'] = self.clean_dataset[['SeriesID']].apply(
                                 lambda row: 'Y' if pd.notnull(row[0])
                                 else 'N', axis=1)
-        self.clean_dataset['SeriesID'].fillna(value='0', inplace=True)
+        self.clean_dataset['SeriesID'].fillna(value=0, inplace=True)
         #Series Column, drop as duplicate to SeriesID Column (perfectly co-linear)
         self.clean_dataset.drop('Series', axis=1, inplace=True)
         #HowHeard Column, drop, not enough data to use (99 out of almost 17000)
