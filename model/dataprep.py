@@ -131,7 +131,7 @@ class TrailDataPrep(object):
         self.clean_dataset['HasSeries'] = self.clean_dataset[['SeriesID']].apply(
                                 lambda row: 'Y' if pd.notnull(row[0])
                                 else 'N', axis=1)
-        self.clean_dataset['SeriesID'].fillna(value=0, inplace=True)
+        self.clean_dataset['SeriesID'].fillna(value=0., inplace=True)
         #Series Column, drop as duplicate to SeriesID Column (perfectly co-linear)
         self.clean_dataset.drop('Series', axis=1, inplace=True)
         #HowHeard Column, drop, not enough data to use (99 out of almost 17000)
@@ -253,19 +253,19 @@ class TrailDataPrep(object):
         such that it is only looking at the type of series over multiple years'''
 
         #align winter series from 2015/2016 and 2016/2017 under ID 1
-        self.clean_dataset['SeriesID'] = self.clean_dataset['SeriesID'].apply(
-                                        lambda x: 1 if x == 4 else x)
+        self.clean_dataset['SeriesID'] = self.clean_dataset[['SeriesID']].apply(
+                                lambda row: 1. if row[0] == 4. else row[0], axis=1)
         #align half marathon series from 206 and 2017 under ID 2
-        self.clean_dataset['SeriesID'] = self.clean_dataset['SeriesID'].apply(
-                                        lambda x: 2 if x == 5 else x)
+        self.clean_dataset['SeriesID'] = self.clean_dataset[['SeriesID']].apply(
+                                lambda row: 2. if row[0] == 5. else row[0], axis=1)
         #align trail to grill series from 2016 and 2017 under ID 3
-        self.clean_dataset['SeriesID'] = self.clean_dataset['SeriesID'].apply(
-                                        lambda x: 3 if x == 6 else x)
+        self.clean_dataset['SeriesID'] = self.clean_dataset[['SeriesID']].apply(
+                                lambda row: 3. if row[0] == 6. else row[0], axis=1)
         #assign a series ID to Street Scrambles, set under ID 4
         self.clean_dataset['SeriesID'] = self.clean_dataset[[
-                                        'EventType', 'SeriesID']].apply(
-                                        lambda row: 4 if row[0] == 'Street Scramble'
-                                        else row[1])
+                                'EventType', 'SeriesID']].apply(
+                                lambda row: 4. if row[0] == 'Street Scramble'
+                                else row[1], axis=1)
 
     def engr_features(self):
         pass
