@@ -52,7 +52,7 @@ class TrailDataPrep(object):
             ds."Miles", mt."Time", mt."Total fee", sstp."Prereg", mt."Registration time",
             mt."Payment method", mt."Street Address", mt."City", mt."State/Province",
             mt."Zip Code", mt."Country", mt."Emergency contact name", mt."Contact",
-            mt."Tshirt", mt."Hoodie", mt."Event_Date", mt."Event_Date", mt."MergeoEvent",
+            mt."Tshirt", mt."Hoodie", mt."Event_Name", mt."Event_Date", mt."MergeoEvent",
             mt."EventTypeID", et."EventType", mt."SeriesID", s."Series", sstp."HowHeard"
             FROM master_temp mt
             LEFT JOIN "DistanceSorts" ds ON LOWER(mt."Distance") = LOWER(ds."Distance")
