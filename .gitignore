@@ -4,3 +4,6 @@ data/*.accdb
 data/log.txt
 *.ipynb_checkpoints
 .DS_Store
+model/*.pkl
+model/cv_bestmodel_base/
+model/tvs_bestmodel_base/
