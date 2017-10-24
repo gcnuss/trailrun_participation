@@ -3,9 +3,8 @@ data/*.zip
 data/*.accdb
 data/log.txt
 *.ipynb_checkpoints
+*.pyc
 .DS_Store
 model/*.pkl
-model/cv_bestmodel_base/
-model/tvs_bestmodel_base/
-model/tvs_bestmodel_nz/
-model/tvs_bestmodel_nz_r2/
+model/23OCT17_modeldev_v2/
+model/24OCT17_pipelinerun/
