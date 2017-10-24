@@ -3,7 +3,6 @@ import numpy as np
 import pandas as pd
 import time
 import matplotlib.pyplot as plt
-%matplotlib inline
 from collections import defaultdict
 
 import pyspark as ps    # for the pyspark suite
@@ -25,7 +24,10 @@ from pyspark.ml.tuning import CrossValidator, ParamGridBuilder, TrainValidationS
 import cPickle as pickle
 
 class implicit_als(object):
-'''ADD DOC STRING, parameter and attribute definitions'''
+    '''ADD DOC STRING, parameter and attribute definitions
+
+    data_df should be a pandas dataframe containing all starting data cleaned
+    by dataprep.py file'''
 
     def __init__(self, data_df):
         self.data_df = data_df
@@ -38,11 +40,17 @@ class implicit_als(object):
         self.validate_mat = None
         self.test_mat = None
         self.base_model = None
+        self.tvs_model = None
+        self.tvs_bestmodel = None
+        self.tvs_trainpreds = None
+        self.tvs_trainerror = None
+        self.tvs_valpreds = None
+        self.tvs_valerror = None
 
     def prep_spark_ones_df(self):
         '''creates spark df with a column of 1's added for participated labels'''
-        participated_list = np.full(len(data), 1), 1)
-        self.data_df.insert(2, 'Participated', participated list)
+        participated_list = np.full((len(self.data_df), 1), 1)
+        self.data_df.insert(2, 'Participated', participated_list)
         self.spark_onesdata_df = spark.createDataFrame(self.data_df)
 
         return self.spark_onesdata_df
@@ -69,8 +77,8 @@ class implicit_als(object):
             seriesid = self.data_df[self.data_df['EventID'] == event]['SeriesID'].values[0]
             eventtype = self.data_df[self.data_df['EventID'] == event]['EventTypeID'].values[0]
             totalfeeavg = int(round(self.data_df[self.data_df['EventID'] == event]['Total fee'].values.mean()))
-            milesavg = int(round(self.data_df[cleaned_df['EventID'] == event]['Miles2'].values.mean()))
-            venuezip = self.data_df[selfdata_df['EventID'] == event]['Venue_Zip'].values[0]
+            milesavg = int(round(self.data_df[self.data_df['EventID'] == event]['Miles2'].values.mean()))
+            venuezip = self.data_df[self.data_df['EventID'] == event]['Venue_Zip'].values[0]
             for person in unique_personIDs:
                 if event in D[person][0]:
                     data_w_zeros.append([person, event, 1, date, seriesid, eventtype, totalfeeavg, milesavg, venuezip])
@@ -83,16 +91,16 @@ class implicit_als(object):
 
         return self.spark_full_df
 
-    def train_val_test_split(self, spark_df=self.spark_full_df, test_prop=0.2, val_prop=0.2):
+    def train_val_test_split(self, test_prop=0.2, val_prop=0.2):
         '''Performs an 80/20 split for train/test, then splits train again at
         80/20 for train/validate datasets; before splitting, sorts the data based
         on event date so that the most recent events are in the test set and
         oldest are in the training set (good practice for recommenders)'''
 
-        trainval = spark_df.sort('Event_Date', ascending=True).limit(int(round(
-                                    spark_df.count()*(1-test_prop))))
-        self.test = spark_df.sort('Event_Date', ascending=False).limit(int(round(
-                                    spark_df.count()*test_prop)))
+        trainval = self.spark_full_df.sort('Event_Date', ascending=True).limit(int(round(
+                                    self.spark_full_df.count()*(1-test_prop))))
+        self.test = self.spark_full_df.sort('Event_Date', ascending=False).limit(int(round(
+                                    self.spark_full_df.count()*test_prop)))
         self.train = trainval.sort('Event_Date', ascending=True).limit(int(round(
                                     trainval.count()*(1-val_prop))))
         self.validate = trainval.sort('Event_Date', ascending=False).limit(int(round(
@@ -102,7 +110,7 @@ class implicit_als(object):
         print('Validation Size: {}'.format(round(self.validate.count())))
         print('Test Size: {}'.format(round(self.test.count())))
 
-        return self.train, self.validate, self.test
+        #return self.train, self.validate, self.test
 
     def print_train_val_test_info(self, event_param):
         print("participants in train: {}".format(self.train.select('PersonID').distinct().count()))
@@ -131,7 +139,7 @@ class implicit_als(object):
                                                event_param, 'inner')\
                                          .count()))
 
-    def create_participate_matrices(self, self.train, self.validate, self.test, event_param):
+    def create_participate_matrices(self, event_param):
         '''For ALS modeling purposes, strips down data to only PersonID, chosen
         item feature (e.g. EventID, SeriesID, Venue_Zip, etc), Participated,
         and Event_Data columns'''
@@ -140,9 +148,9 @@ class implicit_als(object):
         self.validate_mat = self.validate.select("PersonID", event_param, "Participated", "Event_Date")
         self.test_mat = self.test.select("PersonID", event_param, "Participated", "Event_Date")
 
-        return self.train_mat, self.validate_mat, self.test_mat
+        #return self.train_mat, self.validate_mat, self.test_mat
 
-    def fit_ALS(self, train_data=self.train_mat, rank=100, maxIter=10, regParam=0.1,
+    def fit_ALS(self, rank=100, maxIter=10, regParam=0.1,
                 userCol="PersonID", itemCol="EventID", ratingCol="Participated",
                 nonnegative=True, implicitPrefs=True, alpha=1.0, coldStartStrategy="drop"):
         '''Fit a single baseline ALS model based on selected parameters for training data'''
@@ -152,9 +160,9 @@ class implicit_als(object):
                     implicitPrefs=implicitPrefs, alpha=alpha,
                     coldStartStrategy=coldStartStrategy)
 
-        self.base_model = als.fit(train_data)
+        self.base_model = als.fit(self.train_mat)
 
-        return self.base_model
+        #return self.base_model
 
     def predict_ALS(self, model, val_data, scoring="rmse"):
         '''run prediction on ALS model using provided scoring method, model, and
@@ -181,7 +189,7 @@ class implicit_als(object):
 
         return predictions, error
 
-    def run_ALS_CV(event_param, train_data=self.train_mat, val_data=self.val_mat):
+    def run_ALS_CV(event_param):
 
         estimator=ALS(userCol="PersonID", itemCol=event_param, ratingCol="Participated",
                     nonnegative=True, coldStartStrategy="drop", implicitPrefs=True)
@@ -196,27 +204,26 @@ class implicit_als(object):
         cv = CrossValidator(estimator=estimator, estimatorParamMaps=grid,
                                     evaluator=evaluator, numFolds=3)
 
-        cv_model = cv.fit(train_data)
+        cv_model = cv.fit(self.train_mat)
         cv_bestmodel = cv_model.bestModel
 
         print('Predictions on Training Data:')
-        cv_trainpreds, cv_trainrmse = predict_ALS(cv_bestmodel, train_data)
+        cv_trainpreds, cv_trainrmse = predict_ALS(cv_bestmodel, self.train_mat)
 
         print('Predictions on Validation Data:')
-        cv_valpreds, cv_valrmse = predict_ALS(cv_bestmodel, val_data)
+        cv_valpreds, cv_valrmse = predict_ALS(cv_bestmodel, self.validate_mat)
 
         return cv_model, cv_bestmodel, cv_trainpreds, cv_trainrmse, cv_valpreds, cv_valrmse
 
-    def run_ALS_TVS(event_param, train_data=self.train_mat, val_data=self.val_mat,
-                    train_on_ones=False, predict_on_ones=False, scoring="rmse"):
+    def run_ALS_TVS(self, event_param, train_on_ones=False, predict_on_ones=False, scoring="rmse"):
 
         estimator=ALS(userCol="PersonID", itemCol=event_param,
-                    ratingCol="Participated", nonnegative=True,
-                  coldStartStrategy="drop", implicitPrefs=True)
+                    ratingCol="Participated", nonnegative=True, implicitPrefs=True)
 
         grid=ParamGridBuilder().addGrid(ALS.rank, [10, 50, 100]).addGrid(
             ALS.maxIter, [10, 50]).addGrid(ALS.regParam, [0.1, 0.01]).addGrid(
-            ALS.alpha, [0.01, 1.0, 20]).build()
+            ALS.alpha, [0.01, 1.0, 20, 40]).addGrid(
+            ALS.coldStartStrategy, ["nan", "drop"]).build()
 
         evaluator=RegressionEvaluator(metricName=scoring, labelCol="Participated",
                                     predictionCol="prediction")
@@ -225,33 +232,31 @@ class implicit_als(object):
                                     evaluator=evaluator)
 
         if train_on_ones == True or predict_on_ones == True:
-            train_wz_pd = train_data.toPandas()
+            train_wz_pd = self.train_mat.toPandas()
             train_nz = spark.createDataFrame(train_wz_pd[train_wz_pd['Participated'] == 1])
-            val_wz_pd = val_data.toPandas()
+            val_wz_pd = self.val_mat.toPandas()
             validate_nz = spark.createDataFrame(val_wz_pd[val_wz_pd['Participated'] == 1])
-            train_nz_base, validate_nz_base, test_nz_base = create_participate_matrices(
-            train_nz, validate_nz, test_nz, "EventID")
 
         if train_on_ones == True:
-            tvs_model = tvs.fit(train_nz_base)
+            tvs_model = tvs.fit(train_nz)
         else:
-            self.tvs_model = tvs.fit(train_data)
+            self.tvs_model = tvs.fit(self.train_mat)
 
         self.tvs_bestmodel = self.tvs_model.bestModel
 
         if predict_on_ones == True:
             print('Predictions on Training Data:')
-            self.tvs_trainpreds, self.tvs_trainerror = predict_ALS(self.tvs_bestmodel, train_nz_base, scoring)
+            self.tvs_trainpreds, self.tvs_trainerror = self.predict_ALS(self.tvs_bestmodel, train_nz, scoring)
             print('Predictions on Validation Data:')
-            self.tvs_valpreds, self.tvs_valerror = predict_ALS(self.tvs_bestmodel, validate_nz_base, scoring)
+            self.tvs_valpreds, self.tvs_valerror = self.predict_ALS(self.tvs_bestmodel, validate_nz, scoring)
 
         else:
             print('Predictions on Training Data:')
-            self.tvs_trainpreds, self.tvs_trainerror = predict_ALS(self.tvs_bestmodel, train_data, scoring)
+            self.tvs_trainpreds, self.tvs_trainerror = self.predict_ALS(self.tvs_bestmodel, self.train_mat, scoring)
             print('Predictions on Validation Data:')
-            self.tvs_valpreds, self.tvs_valerror = predict_ALS(self.tvs_bestmodel, val_data, scoring)
+            self.tvs_valpreds, self.tvs_valerror = self.predict_ALS(self.tvs_bestmodel, self.validate_mat, scoring)
 
-        return self.tvs_model, self.tvs_bestmodel, self.tvs_trainpreds, self.tvs_trainerror, self.tvs_valpreds, self.tvs_valerror
+        #return self.tvs_model, self.tvs_bestmodel, self.tvs_trainpreds, self.tvs_trainerror, self.tvs_valpreds, self.tvs_valerror
 
 if __name__ == '__main__':
     #'''placeholder - add code to save spark df's for future use once run one time'''

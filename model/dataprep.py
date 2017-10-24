@@ -3,6 +3,8 @@ import pandas as pd
 import numpy as np
 from collections import defaultdict
 import geocoder
+import cPickle as pickle
+import time
 
 class TrailDataPrep(object):
     '''This class initiates a psycopg2 session to connect to the postgres db
@@ -287,7 +289,7 @@ class TrailDataPrep(object):
         '''Gets venue addresses from geocoder, extracts zip codes, and adds them
         to the clean_dataset; future improvements: have db owner add the venue
         information to the original dataset; add exceptions to this function to
-        better handle errors.'''
+        better handle errors!'''
 
         event_names = list(self.clean_dataset['Event_Name'].unique())
         event_venues = ["Fort Ebey State Park, Coupeville, WA",
@@ -315,27 +317,30 @@ class TrailDataPrep(object):
         "Everett Mall, Everett, WA", "Fremont Sunday Flea Market, Fremont, Seattle, WA",
         "Nordic Heritage Museum, Ballard, Seattle, WA"]
 
-        if len(event_names) != len(event_venues):
-            print('Error in add_venue_zip; event_venues length does not match\
-                    event_names length; check data before proceeding.')
-            break
-        else:
-            continue
+        #if len(event_names) != len(event_venues):
+        #    print('Error in add_venue_zip; event_venues length does not match\
+                #    event_names length; check data before proceeding.')
+        #else:
+        #    continue
 
         self.event_nm_ven_dict = dict(zip(event_names, event_venues))
 
         self.event_dets = []
-        for name, venue in event_nm_ven:
+        for name, venue in self.event_nm_ven_dict.iteritems():
             g = geocoder.google(venue)
             zipcode = g.postal
             self.event_dets.append((name, venue, g, zipcode))
-            time.sleep(0.1)
+            time.sleep(.2)
 
         D_zips = defaultdict()
-        for name, venue, g, zipcode in event_dets:
-            D_zips[name] = int(zipcode)
+        for name, venue, g, zipcode in self.event_dets:
+            if type(zipcode) == unicode:
+                D_zips[name] = int(zipcode)
+            else:
+                print name, venue, g, zipcode
+                D_zips[name] = -1
 
-        clean_dataset['Venue_Zip'] = clean_dataset['Event_Name'].apply(lambda x: D_zips[x])
+        self.clean_dataset['Venue_Zip'] = self.clean_dataset['Event_Name'].apply(lambda x: D_zips[x])
 
 if __name__ == "__main__":
     dataprep = TrailDataPrep(dbname='mergeoruns101717', host='localhost')
@@ -343,6 +348,7 @@ if __name__ == "__main__":
     dataprep.data_coll_query()
     dataprep.create_df()
     dataprep.col_cleaning()
+    dataprep.engr_features()
     cleaned_df = dataprep.clean_dataset
     with open ('cleaned_df.pkl', 'w') as f:
         pickle.dump(cleaned_df, f)
