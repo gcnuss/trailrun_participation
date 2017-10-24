@@ -7,3 +7,5 @@ data/log.txt
 model/*.pkl
 model/cv_bestmodel_base/
 model/tvs_bestmodel_base/
+model/tvs_bestmodel_nz/
+model/tvs_bestmodel_nz_r2/
