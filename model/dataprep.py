@@ -2,6 +2,7 @@ import psycopg2
 import pandas as pd
 import numpy as np
 from collections import defaultdict
+import geocoder
 
 class TrailDataPrep(object):
     '''This class initiates a psycopg2 session to connect to the postgres db
@@ -19,6 +20,10 @@ class TrailDataPrep(object):
     Attributes:
         query_results: the output from the combined psql query
         base_dataset: initial pandas df with raw data from the postgres db
+        clean_dataset: cleaned pandas df that all cleaning actions are performed on
+        event_nm_ven_dict: dictionary of event names and venues
+        event_dets = list of tuples with each tuple containing event name, venue,
+                        geocoder.google address instance, and zip codes
     '''
 
 
@@ -29,6 +34,8 @@ class TrailDataPrep(object):
         self.query_results = None
         self.base_dataset = None
         self.clean_dataset = None
+        self.event_nm_ven_dict = None
+        self.event_dets = None
 
     def init_psql_session(self):
         conn = psycopg2.connect(dbname=self.dbname, host=self.host)
@@ -268,7 +275,67 @@ class TrailDataPrep(object):
                                 else row[1], axis=1)
 
     def engr_features(self):
-        pass
+        '''Adds some features to the data and transforms some as well.  Calls
+        separate functions where appropriate for more involved feature engineering.
+        Running this function runs all feature engineering functions.'''
+
+        self.add_venue_zip()
+
+
+
+    def add_venue_zip(self):
+        '''Gets venue addresses from geocoder, extracts zip codes, and adds them
+        to the clean_dataset; future improvements: have db owner add the venue
+        information to the original dataset; add exceptions to this function to
+        better handle errors.'''
+
+        event_names = list(self.clean_dataset['Event_Name'].unique())
+        event_venues = ["Fort Ebey State Park, Coupeville, WA",
+        "Interlaken Park, Seattle, WA", "Ravenna Park, Seattle, WA",
+        "Carkeek Park, Seattle, WA", "Rattlesnake Ridge, North Bend, WA",
+        "Cedar Mountain, Renton, WA", "Tiger Mountain, Issaquah, WA",
+        "Redmond Watershed, Redmond, WA", "Interlaken Park, Seattle, WA",
+        "Ravenna Park, Seattle, WA", "Carkeek Park, Seattle, WA",
+        "Seward Park, Seattle, WA", "Soaring Eagle Regional Park, Sammamish, WA",
+        "Redmond Watershed, Redmond, WA", "Soaring Eagle Regional Park, Sammamish, WA",
+        "St. Edward State Park, Kenmore, WA", "Redmond Watershed, Redmond, WA",
+        "Carkeek Park, Seattle, WA", "Lake Sammamish State Park, Issaquah, WA",
+        "Seward Park, Seattle, WA", "Cle Elum, WA", "St. Edward State Park, Kenmore, WA",
+        "St. Edward State Park, Kenmore, WA", "Market Theater, Seattle, WA",
+        "Lord Hill Regional Park, Snohomish, WA", "Eddon Boat Park, Gig Harbor, WA",
+        "Landsburg park, maple valley, wa", "Redmond Watershed, Redmond, WA",
+        "Sprague, WA", "Paradise Valley Conservation Area, Woodinville, WA",
+        "Wilburton Hill Park, Bellevue, WA", "Woodland Park, Seattle, WA",
+        "Seward Park, Seattle, WA", "Cougar Mountain Trailhead, Bellevue, WA",
+        "Alki Beach, West Seattle, WA", "Juanita Beach Park, Kirkland, WA",
+        "Market Theater, Seattle, WA", "Redmond Town Center, Redmond, WA",
+        "Fremont Sunday Flea Market, Fremont, Seattle, WA",
+        "Eddon Boat Park, Gig Harbor, WA", "Lake Sammamish State Park, Issaquah, WA",
+        "Cle Elum-Roslyn High School, Cle Elum, WA", "Interlaken Park, Seattle, WA",
+        "Everett Mall, Everett, WA", "Fremont Sunday Flea Market, Fremont, Seattle, WA",
+        "Nordic Heritage Museum, Ballard, Seattle, WA"]
+
+        if len(event_names) != len(event_venues):
+            print('Error in add_venue_zip; event_venues length does not match\
+                    event_names length; check data before proceeding.')
+            break
+        else:
+            continue
+
+        self.event_nm_ven_dict = dict(zip(event_names, event_venues))
+
+        self.event_dets = []
+        for name, venue in event_nm_ven:
+            g = geocoder.google(venue)
+            zipcode = g.postal
+            self.event_dets.append((name, venue, g, zipcode))
+            time.sleep(0.1)
+
+        D_zips = defaultdict()
+        for name, venue, g, zipcode in event_dets:
+            D_zips[name] = int(zipcode)
+
+        clean_dataset['Venue_Zip'] = clean_dataset['Event_Name'].apply(lambda x: D_zips[x])
 
 if __name__ == "__main__":
     dataprep = TrailDataPrep(dbname='mergeoruns101717', host='localhost')
@@ -277,3 +344,5 @@ if __name__ == "__main__":
     dataprep.create_df()
     dataprep.col_cleaning()
     cleaned_df = dataprep.clean_dataset
+    with open ('cleaned_df.pkl', 'w') as f:
+        pickle.dump(cleaned_df, f)
