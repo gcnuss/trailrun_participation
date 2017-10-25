@@ -22,6 +22,7 @@ from pyspark.ml.recommendation import ALS
 from pyspark.ml.tuning import CrossValidator, ParamGridBuilder, TrainValidationSplit
 
 import cPickle as pickle
+import rank_eval
 
 class implicit_als(object):
     '''ADD DOC STRING, parameter and attribute definitions
@@ -89,7 +90,7 @@ class implicit_als(object):
                         'EventID', 'Participated', 'Event_Date', 'SeriesID',
                         'EventTypeID', 'Total_Fee_Avg', 'Miles2_Avg', 'Venue_Zip']))
 
-        return self.spark_full_df
+        #return self.spark_full_df
 
     def train_val_test_split(self, test_prop=0.2, val_prop=0.2):
         '''Performs an 80/20 split for train/test, then splits train again at
@@ -164,30 +165,41 @@ class implicit_als(object):
 
         #return self.base_model
 
-    def predict_ALS(self, model, val_data, scoring="rmse"):
+    def predict_ALS(self, model, event_param, scoring="rank"):
         '''run prediction on ALS model using provided scoring method, model, and
         validation dataset'''
 
-        predictions = model.transform(val_data)
+        predictions = model.transform(self.validate_mat)
 
         pandas_preds = predictions.toPandas()
         valid_preds = pandas_preds[pd.notnull(pandas_preds['prediction'])]['Participated'].count()
         nan_preds = pandas_preds[pd.isnull(pandas_preds['prediction'])]['Participated'].count()
         print('Predictions includes {} valid values and {} nan values'.format(valid_preds, nan_preds))
-        print('\n')
-        print('Mean prediction is {}'.format(pandas_preds['prediction'].mean()))
+        #print('\n')
+        #print('Mean prediction is {}'.format(pandas_preds['prediction'].mean()))
 
-        #initial evaluation using RMSE (root-mean-squared-error)
-        #address nan values with mean prediction value (for cold starts) if coldStartStrategy is nan
+        if scoring == "rank":
+            import rank_eval
+            rank_processing = rank_eval.RankEval(pandas_preds, "PersonID",
+                        event_param, "Participated", "prediction")
+            val_rank = rank_processing.calc_test_rank()
+            pop_rank = rank_processing.calc_popular_rank()
 
-        evaluator = RegressionEvaluator(metricName=scoring, labelCol="Participated",
+            print("Model Rank = {} and Popular Rank = {}".format(val_rank, pop_rank))
+
+            return predictions, val_rank, pop_rank
+        else:
+            #initial evaluation using RMSE (root-mean-squared-error)
+            #address nan values with mean prediction value (for cold starts) if coldStartStrategy is nan
+
+            evaluator = RegressionEvaluator(metricName=scoring, labelCol="Participated",
                                 predictionCol="prediction")
 
-        error = evaluator.evaluate(predictions.na.fill({'prediction':pandas_preds['prediction'].mean()}))
+            error = evaluator.evaluate(predictions.na.fill({'prediction':pandas_preds['prediction'].mean()}))
 
-        print("Error of Type {} = {}".format(scoring, str(error)))
+            print("Error of Type {} = {}".format(scoring, str(error)))
 
-        return predictions, error
+            return predictions, error
 
     def run_ALS_CV(event_param):
 
