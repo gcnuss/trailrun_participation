@@ -19,30 +19,38 @@ class RegressionDataPrep(object):
     prediction columns), and SeriesID, EventTypeID, and Venue_Zip converted to
     categorical columns using get dummies function'''
 
-    def __init__(self, als_predictions, spark_data_df, user_df):
-        self.als_predictions_pd = als_predictions.toPandas()
+    def __init__(self, spark_data_df, user_df, datasplit, als_predictions=None):
+        if als_predictions != None:
+            self.als_predictions_pd = als_predictions.toPandas()
         self.data_df_pd = spark_data_df.toPandas()
         self.user_df = user_df
-        self.train_gb = None
+        self.datasplit = datasplit
+        self.train_gb = None #rename this to be gb_data; not necessarilly training!
 
     def format_gb_data(self):
         '''Reformat data and combine to create appropriate set of features aligned
         with labels using output from ALS model fit / predict'''
 
-        self.train_gb = pd.merge(self.data_df_pd, self.als_predictions_pd,
-                        how='left', left_on=['PersonID', 'EventID',
-                        'Participated', 'Event_Date'], right_on = ['PersonID',
-                        'EventID', 'Participated', 'Event_Date'])
+        if self.datasplit == 'train':
+            self.train_gb = pd.merge(self.data_df_pd, self.als_predictions_pd,
+                            how='left', on=['PersonID', 'EventID',
+                            'Participated', 'Event_Date'])
+        else:
+            self.train_gb = self.data_df_pd
 
         self.format_gb_user_data()
         self.train_gb = pd.merge(self.train_gb, self.user_gb_df, how='left',
-                        left_on=['PersonID'], right_on = ['PersonID'])
+                        on='PersonID')
 
-        self.train_gb['y_label'] = self.train_gb[['Participated',
+        if self.datasplit == 'train':
+            self.train_gb['y_label'] = self.train_gb[['Participated',
                 'prediction']].apply(lambda row: 1 if row[0] == 1 else row[1], axis=1)
-
-        self.train_gb.drop(['PersonID', 'EventID', 'Participated', 'prediction'],
-                                axis=1, inplace=True)
+            self.train_gb.drop(['PersonID', 'EventID', 'Participated', 'prediction'],
+                axis=1, inplace=True)
+        else:
+            self.train_gb['y_label'] = self.train_gb['Participated']
+            self.train_gb.drop(['PersonID', 'EventID', 'Participated'],
+                axis=1, inplace=True)
 
         self.train_gb = pd.get_dummies(data=self.train_gb,
                     prefix=['SeriesID','EventTypeID','Venue_Zip', 'Gender'],
