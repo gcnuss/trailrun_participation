@@ -30,16 +30,19 @@ class implicit_als(object):
     data_df should be a pandas dataframe containing all starting data cleaned
     by dataprep.py file'''
 
-    def __init__(self, data_df):
+    def __init__(self, data_df, split_val=True):
         self.data_df = data_df
+        self.split_val = split_val
         self.spark_onesdata_df = None
         self.spark_full_df = None
+        self.trainval = None
         self.train = None
         self.validate = None
         self.test = None
         self.train_mat = None
         self.validate_mat = None
         self.test_mat = None
+        self.trainval_mat = None
         self.base_model = None
         self.tvs_model = None
         self.tvs_bestmodel = None
@@ -98,15 +101,16 @@ class implicit_als(object):
         on event date so that the most recent events are in the test set and
         oldest are in the training set (good practice for recommenders)'''
 
-        trainval = self.spark_full_df.sort('Event_Date', ascending=True).limit(int(round(
+        self.trainval = self.spark_full_df.sort('Event_Date', ascending=True).limit(int(round(
                                     self.spark_full_df.count()*(1-test_prop))))
         self.test = self.spark_full_df.sort('Event_Date', ascending=False).limit(int(round(
                                     self.spark_full_df.count()*test_prop)))
-        self.train = trainval.sort('Event_Date', ascending=True).limit(int(round(
-                                    trainval.count()*(1-val_prop))))
-        self.validate = trainval.sort('Event_Date', ascending=False).limit(int(round(
-                                    trainval.count()*(val_prop))))
+        self.train = self.trainval.sort('Event_Date', ascending=True).limit(int(round(
+                                    self.trainval.count()*(1-val_prop))))
+        self.validate = self.trainval.sort('Event_Date', ascending=False).limit(int(round(
+                                    self.trainval.count()*(val_prop))))
 
+        print('TrainVal Size: {}'.format(round(self.trainval.count())))
         print('Train Size: {}'.format(round(self.train.count())))
         print('Validation Size: {}'.format(round(self.validate.count())))
         print('Test Size: {}'.format(round(self.test.count())))
@@ -145,9 +149,13 @@ class implicit_als(object):
         item feature (e.g. EventID, SeriesID, Venue_Zip, etc), Participated,
         and Event_Data columns'''
 
-        self.train_mat = self.train.select("PersonID", event_param, "Participated", "Event_Date")
-        self.validate_mat = self.validate.select("PersonID", event_param, "Participated", "Event_Date")
-        self.test_mat = self.test.select("PersonID", event_param, "Participated", "Event_Date")
+        if self.split_val == True:
+            self.train_mat = self.train.select("PersonID", event_param, "Participated", "Event_Date")
+            self.validate_mat = self.validate.select("PersonID", event_param, "Participated", "Event_Date")
+            self.test_mat = self.test.select("PersonID", event_param, "Participated", "Event_Date")
+        else:
+            self.trainval_mat = self.trainval.select("PersonID", event_param, "Participated", "Event_Date")
+            self.test_mat = self.test.select("PersonID", event_param, "Participated", "Event_Date")
 
         #return self.train_mat, self.validate_mat, self.test_mat
 
@@ -161,7 +169,10 @@ class implicit_als(object):
                     implicitPrefs=implicitPrefs, alpha=alpha,
                     coldStartStrategy=coldStartStrategy)
 
-        self.base_model = als.fit(self.train_mat)
+        if self.split_val == True:
+            self.base_model = als.fit(self.train_mat)
+        else:
+            self.base_model = als.fit(self.trainval_mat)
 
         #return self.base_model
 
@@ -169,7 +180,10 @@ class implicit_als(object):
         '''run prediction on ALS model using provided scoring method, model, and
         validation dataset'''
 
-        predictions = model.transform(self.validate_mat)
+        if self.split_val == True:
+            predictions = model.transform(self.validate_mat)
+        else:
+            predictions = model.transform(self.trainval_mat)
 
         pandas_preds = predictions.toPandas()
         valid_preds = pandas_preds[pd.notnull(pandas_preds['prediction'])]['Participated'].count()
