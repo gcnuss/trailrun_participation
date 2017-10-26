@@ -131,6 +131,7 @@ class implicit_als(object):
                                                'PersonID', 'inner')\
                                          .count()))
         print('\n')
+
         print("{} in train: {}".format(event_param, self.train.select(event_param).distinct().count()))
         print("{} in validate: {}".format(event_param, self.validate.select(event_param).distinct().count()))
         print("{} in test: {}".format(event_param, self.test.select(event_param).distinct().count()))
@@ -181,39 +182,78 @@ class implicit_als(object):
         validation dataset'''
 
         if self.split_val == True:
-            predictions = model.transform(self.validate_mat)
+            val_predictions = model.transform(self.validate_mat)
+
+            pandas_preds = val_predictions.toPandas()
+            valid_preds = val_pandas_preds[pd.notnull(val_pandas_preds['prediction'])]['Participated'].count()
+            nan_preds = val_pandas_preds[pd.isnull(val_pandas_preds['prediction'])]['Participated'].count()
+            print('Predictions includes {} valid values and {} nan values'.format(valid_preds, nan_preds))
+
+            if scoring == "rank":
+                import rank_eval
+                rank_processing = rank_eval.RankEval(pandas_preds, "PersonID",
+                            event_param, "Participated", "prediction")
+                val_rank = rank_processing.calc_test_rank()
+                pop_rank = rank_processing.calc_popular_rank()
+
+                print("Model Rank = {} and Popular Rank = {}".format(val_rank, pop_rank))
+
+                return pandas_preds, val_rank, pop_rank
+            else:
+                #initial evaluation using RMSE (root-mean-squared-error)
+                #address nan values with mean prediction value (for cold starts) if coldStartStrategy is nan
+
+                evaluator = RegressionEvaluator(metricName=scoring, labelCol="Participated",
+                                    predictionCol="prediction")
+
+                error = evaluator.evaluate(predictions.na.fill({'prediction':pandas_preds['prediction'].mean()}))
+
+                print("Error of Type {} = {}".format(scoring, str(error)))
+
+                return pandas_preds, error
+
         else:
-            predictions = model.transform(self.trainval_mat)
+            trainval_predictions = model.transform(self.trainval_mat)
+            test_predictions = model.transform(self.test_mat)
 
-        pandas_preds = predictions.toPandas()
-        valid_preds = pandas_preds[pd.notnull(pandas_preds['prediction'])]['Participated'].count()
-        nan_preds = pandas_preds[pd.isnull(pandas_preds['prediction'])]['Participated'].count()
-        print('Predictions includes {} valid values and {} nan values'.format(valid_preds, nan_preds))
-        #print('\n')
-        #print('Mean prediction is {}'.format(pandas_preds['prediction'].mean()))
+            trainval_pandas_preds = trainval_predictions.toPandas()
+            valid_preds = trainval_pandas_preds[pd.notnull(trainval_pandas_preds['prediction'])]['Participated'].count()
+            nan_preds = trainval_pandas_preds[pd.isnull(trainval_pandas_preds['prediction'])]['Participated'].count()
+            print('Trainval predictions includes {} valid values and {} nan values'.format(valid_preds, nan_preds))
 
-        if scoring == "rank":
-            import rank_eval
-            rank_processing = rank_eval.RankEval(pandas_preds, "PersonID",
-                        event_param, "Participated", "prediction")
-            val_rank = rank_processing.calc_test_rank()
-            pop_rank = rank_processing.calc_popular_rank()
+            test_pandas_preds = test_predictions.toPandas()
+            valid_preds = test_pandas_preds[pd.notnull(test_pandas_preds['prediction'])]['Participated'].count()
+            nan_preds = test_pandas_preds[pd.isnull(test_pandas_preds['prediction'])]['Participated'].count()
+            print('Test predictions includes {} valid values and {} nan values'.format(valid_preds, nan_preds))
 
-            print("Model Rank = {} and Popular Rank = {}".format(val_rank, pop_rank))
+            if scoring == "rank":
+                import rank_eval
+                trainval_rank_processing = rank_eval.RankEval(trainval_pandas_preds, "PersonID",
+                            event_param, "Participated", "prediction")
+                trainval_rank = trainval_rank_processing.calc_test_rank()
+                trainval_pop_rank = trainval_rank_processing.calc_popular_rank()
 
-            return predictions, val_rank, pop_rank
-        else:
-            #initial evaluation using RMSE (root-mean-squared-error)
-            #address nan values with mean prediction value (for cold starts) if coldStartStrategy is nan
+                test_rank_processing = rank_eval.RankEval(test_pandas_preds, "PersonID",
+                            event_param, "Participated", "prediction")
+                test_rank = test_rank_processing.calc_test_rank()
+                test_pop_rank = test_rank_processing.calc_popular_rank()
 
-            evaluator = RegressionEvaluator(metricName=scoring, labelCol="Participated",
-                                predictionCol="prediction")
+                print("Trainval Model Rank = {} and Popular Rank = {}".format(trainval_rank, trainval_pop_rank))
+                print("Test Model Rank = {} and Popular Rank = {}".format(test_rank, test_pop_rank))
 
-            error = evaluator.evaluate(predictions.na.fill({'prediction':pandas_preds['prediction'].mean()}))
+                return trainval_pandas_preds, trainval_rank, trainval_pop_rank, test_pandas_preds, test_rank, test_pop_rank
+            else:
+                #initial evaluation using RMSE (root-mean-squared-error)
+                #address nan values with mean prediction value (for cold starts) if coldStartStrategy is nan
 
-            print("Error of Type {} = {}".format(scoring, str(error)))
+                evaluator = RegressionEvaluator(metricName=scoring, labelCol="Participated",
+                                    predictionCol="prediction")
 
-            return predictions, error
+                error = evaluator.evaluate(predictions.na.fill({'prediction':pandas_preds['prediction'].mean()}))
+
+                print("Error of Type {} = {}".format(scoring, str(error)))
+
+                return predictions, error
 
     def run_ALS_CV(event_param):
 
