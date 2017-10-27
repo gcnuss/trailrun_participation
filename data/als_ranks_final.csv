@@ -1,0 +1,11 @@
+als_model, trainvstest, alpha, factors, model_rank, popular_rank, cold_starts_dropped
+series, train, 80, 5, 1.53641759679, 26.3524346793, 0
+series, test, 80, 5, 4.8609993163, 10.7472903594, 0
+event_type, train, 80, 30, 0.00684473620581, 7.99064726841, 0
+event_type, test, 80, 30, 0.41742084036, 1.91100969766, 0
+venue, train, 80, 5, 6.5784112444, 23.2128174676, 0
+venue, test, 80, 5, 13.3852376048, 31.7683970337, 0
+avg_fee, train, 80, 5, 6.02542849691, 26.5368429206, 0
+avg_fee, test, 80, 5, 14.875102889, 24.3897743898, 32292
+avg_miles, train, 80, 5, 2.24288129789, 23.1294536817, 0
+avg_miles, test, 80, 5, 10.1237046386, 31.4678216147, 43056
