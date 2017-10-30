@@ -137,6 +137,7 @@ class TrailDataPrep(object):
         self.clean_dataset['Hoodie'].fillna(value='N', inplace=True)
         #SeriesID Column
         self.clean_series_ids()
+        self.add_2015_series_ids()
         self.clean_dataset['HasSeries'] = self.clean_dataset[['SeriesID']].apply(
                                 lambda row: 'Y' if pd.notnull(row[0])
                                 else 'N', axis=1)
@@ -277,17 +278,21 @@ class TrailDataPrep(object):
                                 else row[1], axis=1)
 
     def add_2015_series_ids(self):
-        2015_ids = pd.read_csv('../data/2015_seriesid_assigns.csv')
-        seriesids_dict = {} #create dict of eventID, seriesID
-        #Transform SeriesID column to replace current SeriesID with value in dict if current val is 0.0
-        pass
+        series_ids = pd.read_csv('../data/2015_seriesid_assigns.csv')
+        event_ids_to_trans = series_ids['EventID'].values
+        seriesid_dict = dict(zip(series_ids['EventID'].values, series_ids['SeriesID'].values))
+        self.clean_dataset['SeriesID'] = self.clean_dataset[['EventID', 'SeriesID']].apply(
+                                lambda row: seriesid_dict[row[0]]
+                                if row[0] in event_ids_to_trans else row[1], axis=1)
 
     def engr_features(self):
         '''Adds some features to the data and transforms some as well.  Calls
         separate functions where appropriate for more involved feature engineering.
         Running this function runs all feature engineering functions.'''
 
-        self.add_venue_zip()
+        #self.add_venue_zip() only run this function if need to re-pull all zip codes from geocoder
+        #otherwise pull zip codes from existing list saved under model/event_zips_df.pkl:
+        self.add_venue_zip_existing()
 
 
 
@@ -323,12 +328,6 @@ class TrailDataPrep(object):
         "Everett Mall, Everett, WA", "Fremont Sunday Flea Market, Fremont, Seattle, WA",
         "Nordic Heritage Museum, Ballard, Seattle, WA"]
 
-        #if len(event_names) != len(event_venues):
-        #    print('Error in add_venue_zip; event_venues length does not match\
-                #    event_names length; check data before proceeding.')
-        #else:
-        #    continue
-
         self.event_nm_ven_dict = dict(zip(event_names, event_venues))
 
         self.event_dets = []
@@ -348,6 +347,15 @@ class TrailDataPrep(object):
 
         self.clean_dataset['Venue_Zip'] = self.clean_dataset['Event_Name'].apply(lambda x: D_zips[x])
 
+    def add_venue_zip_existing(self):
+
+        with open('event_zips_df.pkl', 'rb') as f:
+            event_zips = pickle.load(f)
+
+        zips_dict = dict(zip(event_zips['EventID'].values, event_zips['Venue_Zip2'].values))
+
+        self.clean_dataset['Venue_Zip'] = self.clean_dataset['EventID'].apply(lambda x: zips_dict[x])
+
 if __name__ == "__main__":
     dataprep = TrailDataPrep(dbname='mergeoruns101717', host='localhost')
     dataprep.init_psql_session()
@@ -356,5 +364,5 @@ if __name__ == "__main__":
     dataprep.col_cleaning()
     dataprep.engr_features()
     cleaned_df = dataprep.clean_dataset
-    with open ('cleaned_df.pkl', 'w') as f:
+    with open ('30OCT17_finalfitmodelsv2/cleaned_df.pkl', 'w') as f:
         pickle.dump(cleaned_df, f)

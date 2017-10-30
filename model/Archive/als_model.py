@@ -33,7 +33,8 @@ class implicit_als(object):
     def __init__(self, data_df, split_val=True):
         self.data_df = data_df
         self.split_val = split_val
-        self.full_df = None
+        self.spark_onesdata_df = None
+        self.spark_full_df = None
         self.trainval = None
         self.train = None
         self.validate = None
@@ -43,8 +44,22 @@ class implicit_als(object):
         self.test_mat = None
         self.trainval_mat = None
         self.base_model = None
+        self.tvs_model = None
+        self.tvs_bestmodel = None
+        self.tvs_trainpreds = None
+        self.tvs_trainerror = None
+        self.tvs_valpreds = None
+        self.tvs_valerror = None
 
-    def prep_full_df(self):
+    def prep_spark_ones_df(self):
+        '''creates spark df with a column of 1's added for participated labels'''
+        participated_list = np.full((len(self.data_df), 1), 1)
+        self.data_df.insert(2, 'Participated', participated_list)
+        self.spark_onesdata_df = spark.createDataFrame(self.data_df)
+
+        return self.spark_onesdata_df
+
+    def prep_spark_full_df(self):
         '''creates spark df with participated column containing both 1's and 0's,
         and adds other data for 0's rows as appropriate; takes the mean value for
         Total fee and Miles2 because we need one value for each event and those
@@ -74,9 +89,9 @@ class implicit_als(object):
                 else:
                     data_w_zeros.append([person, event, 0, date, seriesid, eventtype, totalfeeavg, milesavg, venuezip])
 
-        self.full_df = pd.DataFrame(data_w_zeros, columns=['PersonID',
+        self.spark_full_df = spark.createDataFrame(pd.DataFrame(data_w_zeros, columns=['PersonID',
                         'EventID', 'Participated', 'Event_Date', 'SeriesID',
-                        'EventTypeID', 'Total_Fee_Avg', 'Miles2_Avg', 'Venue_Zip'])
+                        'EventTypeID', 'Total_Fee_Avg', 'Miles2_Avg', 'Venue_Zip']))
 
         #return self.spark_full_df
 
@@ -86,103 +101,62 @@ class implicit_als(object):
         on event date so that the most recent events are in the test set and
         oldest are in the training set (good practice for recommenders)'''
 
-        self.trainval = self.full_df.sort_values(by='Event_Date', ascending=True
-                        ).iloc[:int(round(len(self.full_df)*(1-test_prop)))]
-        self.test = self.full_df.sort_values(by='Event_Date', ascending=True
-                        ).iloc[int(round(len(self.full_df)*(1-test_prop))):]
-        self.train = self.trainval.sort_values(by='Event_Date', ascending=True
-                        ).iloc[:int(round(len(self.trainval)*(1-val_prop)))]
-        self.validate = self.trainval.sort_values(by='Event_Date', ascending=True
-                        ).iloc[int(round(len(self.trainval)*(1-val_prop))):]
+        self.trainval = self.spark_full_df.sort('Event_Date', ascending=True).limit(int(round(
+                                    self.spark_full_df.count()*(1-test_prop))))
+        self.test = self.spark_full_df.sort('Event_Date', ascending=False).limit(int(round(
+                                    self.spark_full_df.count()*test_prop)))
+        self.train = self.trainval.sort('Event_Date', ascending=True).limit(int(round(
+                                    self.trainval.count()*(1-val_prop))))
+        self.validate = self.trainval.sort('Event_Date', ascending=False).limit(int(round(
+                                    self.trainval.count()*(val_prop))))
 
-        print('TrainVal Size: {}'.format(round(len(self.trainval.values))))
-        print('Train Size: {}'.format(round(len(self.train.values))))
-        print('Validation Size: {}'.format(round(len(self.validate.values))))
-        print('Test Size: {}'.format(round(len(self.test.values))))
-
-        #return self.train, self.validate, self.test
-
-    def train_val_test_split_byseries(self, test_prop=0.2, val_prop=0.2):
-        '''Performs an 80/20 split for train/test, then splits train again at
-        80/20 for train/validate datasets; before splitting, sorts the data based
-        on event date so that the most recent events are in the test set and
-        oldest are in the training set (good practice for recommenders); as compared
-        to the baseline data split function above, this one splits each set of series
-        data individually for more balanced representation in each split.'''
-
-        for val in [0., 1., 2., 3., 4.]:
-            self.trainval_sub = self.full_df[self.full_df['SeriesID']==val].sort_values(
-                            by='Event_Date', ascending=True
-                            ).iloc[:int(round(len(self.full_df[
-                            self.full_df['SeriesID']==val])*(1-test_prop)))]
-            self.test_sub = self.full_df[self.full_df['SeriesID']==val].sort_values(
-                            by='Event_Date', ascending=True
-                            ).iloc[int(round(len(self.full_df[
-                            self.full_df['SeriesID']==val])*(1-test_prop))):]
-            self.train_sub = self.trainval_sub[
-                            self.trainval_sub['SeriesID']==val].sort_values(
-                            by='Event_Date', ascending=True
-                            ).iloc[:int(round(len(self.trainval_sub[
-                            self.trainval_sub['SeriesID']==val])*(1-val_prop)))]
-            self.validate_sub = self.trainval_sub[
-                            self.trainval_sub['SeriesID']==val].sort_values(
-                            by='Event_Date', ascending=True
-                            ).iloc[int(round(len(self.trainval_sub[
-                            self.trainval_sub['SeriesID']==val])*(1-val_prop))):]
-            if val == 0.0:
-                self.trainval = self.trainval_sub.copy()
-                self.test = self.test_sub.copy()
-                self.train = self.train_sub.copy()
-                self.validate = self.validate_sub.copy()
-            else:
-                self.trainval = self.trainval.append(self.trainval_sub)
-                self.test = self.test.append(self.test_sub)
-                self.train = self.train.append(self.train_sub)
-                self.validate = self.validate.append(self.validate_sub)
-
-        print('TrainVal Size: {}'.format(round(len(self.trainval.values))))
-        print('Train Size: {}'.format(round(len(self.train.values))))
-        print('Validation Size: {}'.format(round(len(self.validate.values))))
-        print('Test Size: {}'.format(round(len(self.test.values))))
+        print('TrainVal Size: {}'.format(round(self.trainval.count())))
+        print('Train Size: {}'.format(round(self.train.count())))
+        print('Validation Size: {}'.format(round(self.validate.count())))
+        print('Test Size: {}'.format(round(self.test.count())))
 
         #return self.train, self.validate, self.test
 
     def print_train_val_test_info(self, event_param):
-        print("participants in train: {}".format(len(self.train['PersonID'].unique())))
-        print("participants in validate: {}".format(len(self.validate['PersonID'].unique())))
-        print("participants in test: {}".format(len(self.test['PersonID'].unique())))
+        print("participants in train: {}".format(self.train.select('PersonID').distinct().count()))
+        print("participants in validate: {}".format(self.validate.select('PersonID').distinct().count()))
+        print("participants in test: {}".format(self.test.select('PersonID').distinct().count()))
         print('\n')
-        print("participants in both train & validate: {}".format(len(np.intersect1d(
-                                        self.train['PersonID'].unique(),
-                                        self.validate['PersonID'].unique()))))
-        print("participants in both train & test: {}".format(len(np.intersect1d(
-                                        self.train['PersonID'].unique(),
-                                        self.test['PersonID'].unique()))))
+        print("participants in both train & validate: {}".format(self.train.select('PersonID').distinct()\
+                                         .join(self.validate.select('PersonID').distinct(),
+                                               'PersonID', 'inner')\
+                                         .count()))
+        print("participants in both train & test: {}".format(self.train.select('PersonID').distinct()\
+                                         .join(self.test.select('PersonID').distinct(),
+                                               'PersonID', 'inner')\
+                                         .count()))
         print('\n')
 
-        print("{} in train: {}".format(event_param, len(self.train[event_param].unique())))
-        print("{} in validate: {}".format(event_param, len(self.validate[event_param].unique())))
-        print("{} in test: {}".format(event_param, len(self.test[event_param].unique())))
+        print("{} in train: {}".format(event_param, self.train.select(event_param).distinct().count()))
+        print("{} in validate: {}".format(event_param, self.validate.select(event_param).distinct().count()))
+        print("{} in test: {}".format(event_param, self.test.select(event_param).distinct().count()))
         print('\n')
-        print("{} in both train & validate: {}".format(event_param, len(np.intersect1d(
-                                        self.train[event_param].unique(),
-                                        self.validate[event_param].unique()))))
-        print("{} in both train & test: {}".format(event_param, len(np.intersect1d(
-                                        self.train[event_param].unique(),
-                                        self.test[event_param].unique()))))
+        print("{} in both train & validate: {}".format(event_param, self.train.select(event_param).distinct()\
+                                         .join(self.validate.select(event_param).distinct(),
+                                               event_param, 'inner')\
+                                         .count()))
+        print("{} in both train & test: {}".format(event_param, self.train.select(event_param).distinct()\
+                                         .join(self.test.select(event_param).distinct(),
+                                               event_param, 'inner')\
+                                         .count()))
 
     def create_participate_matrices(self, event_param):
         '''For ALS modeling purposes, strips down data to only PersonID, chosen
         item feature (e.g. EventID, SeriesID, Venue_Zip, etc), Participated,
-        and Event_Date columns'''
+        and Event_Data columns'''
 
         if self.split_val == True:
-            self.train_mat = self.train[["PersonID", event_param, "Participated", "Event_Date"]]
-            self.validate_mat = self.validate[["PersonID", event_param, "Participated", "Event_Date"]]
-            self.test_mat = self.test[["PersonID", event_param, "Participated", "Event_Date"]]
+            self.train_mat = self.train.select("PersonID", event_param, "Participated", "Event_Date")
+            self.validate_mat = self.validate.select("PersonID", event_param, "Participated", "Event_Date")
+            self.test_mat = self.test.select("PersonID", event_param, "Participated", "Event_Date")
         else:
-            self.trainval_mat = self.trainval[["PersonID", event_param, "Participated", "Event_Date"]]
-            self.test_mat = self.test[["PersonID", event_param, "Participated", "Event_Date"]]
+            self.trainval_mat = self.trainval.select("PersonID", event_param, "Participated", "Event_Date")
+            self.test_mat = self.test.select("PersonID", event_param, "Participated", "Event_Date")
 
         #return self.train_mat, self.validate_mat, self.test_mat
 
@@ -197,19 +171,18 @@ class implicit_als(object):
                     coldStartStrategy=coldStartStrategy)
 
         if self.split_val == True:
-            self.base_model = als.fit(spark.createDataFrame(self.train_mat))
+            self.base_model = als.fit(self.train_mat)
         else:
-            self.base_model = als.fit(spark.createDataFrame(self.trainval_mat))
+            self.base_model = als.fit(self.trainval_mat)
 
         #return self.base_model
 
     def predict_ALS(self, model, event_param, scoring="rank"):
         '''run prediction on ALS model using provided scoring method, model, and
-        either validation dataset if split_val=True or if False, predictions on
-        both trainvalidate and test datasets'''
+        validation dataset'''
 
         if self.split_val == True:
-            val_predictions = model.transform(spark.createDataFrame(self.validate_mat))
+            val_predictions = model.transform(self.validate_mat)
 
             pandas_preds = val_predictions.toPandas()
             valid_preds = val_pandas_preds[pd.notnull(val_pandas_preds['prediction'])]['Participated'].count()
@@ -233,15 +206,15 @@ class implicit_als(object):
                 evaluator = RegressionEvaluator(metricName=scoring, labelCol="Participated",
                                     predictionCol="prediction")
 
-                error = evaluator.evaluate(val_predictions.na.fill({'prediction':pandas_preds['prediction'].mean()}))
+                error = evaluator.evaluate(predictions.na.fill({'prediction':pandas_preds['prediction'].mean()}))
 
                 print("Error of Type {} = {}".format(scoring, str(error)))
 
                 return pandas_preds, error
 
         else:
-            trainval_predictions = model.transform(spark.createDataFrame(self.trainval_mat))
-            test_predictions = model.transform(spark.createDataFrame(self.test_mat))
+            trainval_predictions = model.transform(self.trainval_mat)
+            test_predictions = model.transform(self.test_mat)
 
             trainval_pandas_preds = trainval_predictions.toPandas()
             valid_preds = trainval_pandas_preds[pd.notnull(trainval_pandas_preds['prediction'])]['Participated'].count()
@@ -276,11 +249,80 @@ class implicit_als(object):
                 evaluator = RegressionEvaluator(metricName=scoring, labelCol="Participated",
                                     predictionCol="prediction")
 
-                error = evaluator.evaluate(test_predictions.na.fill({'prediction':test_pandas_preds['prediction'].mean()}))
+                error = evaluator.evaluate(predictions.na.fill({'prediction':pandas_preds['prediction'].mean()}))
 
                 print("Error of Type {} = {}".format(scoring, str(error)))
 
                 return predictions, error
+
+    def run_ALS_CV(event_param):
+
+        estimator=ALS(userCol="PersonID", itemCol=event_param, ratingCol="Participated",
+                    nonnegative=True, coldStartStrategy="drop", implicitPrefs=True)
+
+        grid=ParamGridBuilder().addGrid(ALS.rank, [10, 50, 100]).addGrid(
+            ALS.maxIter, [10, 50]).addGrid(ALS.regParam, [0.1, 0.01]).addGrid(
+            ALS.alpha, [0.01, 1.0, 20]).build()
+
+        evaluator=RegressionEvaluator(metricName="rmse", labelCol="Participated",
+                                    predictionCol="prediction")
+
+        cv = CrossValidator(estimator=estimator, estimatorParamMaps=grid,
+                                    evaluator=evaluator, numFolds=3)
+
+        cv_model = cv.fit(self.train_mat)
+        cv_bestmodel = cv_model.bestModel
+
+        print('Predictions on Training Data:')
+        cv_trainpreds, cv_trainrmse = predict_ALS(cv_bestmodel, self.train_mat)
+
+        print('Predictions on Validation Data:')
+        cv_valpreds, cv_valrmse = predict_ALS(cv_bestmodel, self.validate_mat)
+
+        return cv_model, cv_bestmodel, cv_trainpreds, cv_trainrmse, cv_valpreds, cv_valrmse
+
+    def run_ALS_TVS(self, event_param, train_on_ones=False, predict_on_ones=False, scoring="rmse"):
+
+        estimator=ALS(userCol="PersonID", itemCol=event_param,
+                    ratingCol="Participated", nonnegative=True, implicitPrefs=True)
+
+        grid=ParamGridBuilder().addGrid(ALS.rank, [10, 50, 100]).addGrid(
+            ALS.maxIter, [10, 50]).addGrid(ALS.regParam, [0.1, 0.01]).addGrid(
+            ALS.alpha, [0.01, 1.0, 20, 40]).addGrid(
+            ALS.coldStartStrategy, ["nan", "drop"]).build()
+
+        evaluator=RegressionEvaluator(metricName=scoring, labelCol="Participated",
+                                    predictionCol="prediction")
+
+        tvs = TrainValidationSplit(estimator=estimator, estimatorParamMaps=grid,
+                                    evaluator=evaluator)
+
+        if train_on_ones == True or predict_on_ones == True:
+            train_wz_pd = self.train_mat.toPandas()
+            train_nz = spark.createDataFrame(train_wz_pd[train_wz_pd['Participated'] == 1])
+            val_wz_pd = self.val_mat.toPandas()
+            validate_nz = spark.createDataFrame(val_wz_pd[val_wz_pd['Participated'] == 1])
+
+        if train_on_ones == True:
+            tvs_model = tvs.fit(train_nz)
+        else:
+            self.tvs_model = tvs.fit(self.train_mat)
+
+        self.tvs_bestmodel = self.tvs_model.bestModel
+
+        if predict_on_ones == True:
+            print('Predictions on Training Data:')
+            self.tvs_trainpreds, self.tvs_trainerror = self.predict_ALS(self.tvs_bestmodel, train_nz, scoring)
+            print('Predictions on Validation Data:')
+            self.tvs_valpreds, self.tvs_valerror = self.predict_ALS(self.tvs_bestmodel, validate_nz, scoring)
+
+        else:
+            print('Predictions on Training Data:')
+            self.tvs_trainpreds, self.tvs_trainerror = self.predict_ALS(self.tvs_bestmodel, self.train_mat, scoring)
+            print('Predictions on Validation Data:')
+            self.tvs_valpreds, self.tvs_valerror = self.predict_ALS(self.tvs_bestmodel, self.validate_mat, scoring)
+
+        #return self.tvs_model, self.tvs_bestmodel, self.tvs_trainpreds, self.tvs_trainerror, self.tvs_valpreds, self.tvs_valerror
 
 if __name__ == '__main__':
     #'''placeholder - add code to save spark df's for future use once run one time'''
