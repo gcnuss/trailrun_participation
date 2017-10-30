@@ -276,6 +276,12 @@ class TrailDataPrep(object):
                                 lambda row: 4. if row[0] == 'Street Scramble'
                                 else row[1], axis=1)
 
+    def add_2015_series_ids(self):
+        2015_ids = pd.read_csv('../data/2015_seriesid_assigns.csv')
+        seriesids_dict = {} #create dict of eventID, seriesID
+        #Transform SeriesID column to replace current SeriesID with value in dict if current val is 0.0
+        pass
+
     def engr_features(self):
         '''Adds some features to the data and transforms some as well.  Calls
         separate functions where appropriate for more involved feature engineering.
