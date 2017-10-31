@@ -23,6 +23,8 @@ This project and its results will continue to be documented here on GitHub.  A p
 **Modeling:**
 * Investigate alternative ensemble methods that improve upon the individual ALS models
 * Acquire more data to train additional ALS models (race start times, distance from participant home to venue, race sell out)
+
+
 **EDA, Clustering:**
 * Participant Geographic Trends
 * Participant Registration Trends
