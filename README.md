@@ -1,25 +1,31 @@
-# Trail Run Participation
-Capstone project for Galvanize Data Science Immersive
+# Meridian Geographics (MerGeo) Race Participation
+Capstone Project for Galvanize Data Science Immersive
 
-### Business Understanding
-There is a desire to understand customers’ patterns and factors that drive their participation in events.  The goal of this project is to understand customer participation habits in order to better inform marketing and race definition (location/timing/type) decisions, and to provide better support to customers in line with their interests if possible.  This will include exploration of geographic location (of event relative to home location of individual), when people register (day/time), customer tastes across event types, customer demographics, race characteristics, and associated patterns of participation (time of year, weekday/weekend, etc).
+### Context
+The Pacific Northwest is a popular place to participate in trail runs and navigation races.  There are multiple local companies who put on events in the area.  In this market, how does one company stand out amidst the pack?  As a small, local company, how can one make best use of marketing resources to increase participation and repeat customers?  I am working with local trail run company MerGeo’s participant and race data to help answer questions such as these.  The goal of this project is to better understand customer participation habits in order to improve marketing and race definition (location/timing/type) decisions, and to provide better support to customers in line with their interests where possible.
 
-### Data Understanding
-NW Trail Runs has an existing Access Database and database manager that I will work with to access the data and become familiar with it.  Currently I’ve taken an initial look at the database and there are sufficient attributes that I can work with.  There is data from several events that is not in the database yet but I’ve been in communication with the database manager and he will be adding the missing recent events in the next week.
-
-### Data Preparation
-I took a look at options to connect directly to MS Access so that I can get updated data whenever it is added, but the paths to do so are complex enough to not provide sufficient ROI for the effort on this project.  Instead, I have found an app for my Mac that will convert an Access database to a .sql file that I can import into postgres.  That is where I’ll start.  I’ll also need to do a fair bit of data cleaning and feature engineering to transform the existing registration and results data into the features needed to assess the factors of interest.
+### The Data
+The data for this project was pulled from MerGeo's existing MS Access Database.  Data includes participant features gathered during registration as well as numerous features describing each event.  The data includes 16,978 participations across 10,764 racers and 86 races in a roughly 2.5 year period.  The participation sparsity is 98%.  I've developed a data preparation pipeline that leverages PostgreSQL and Python to mine the data, address missing values and inconsistent data entries, and reformat features as needed to support EDA and modeling.  Mining the Access Database utilizes the Mac app "ACCDB MDB Explorer", which provides functionality to export the database as a .sql file.
 
 ### Modeling
-This project will include a fair bit of EDA and feature engineering upfront.  For modeling, I am considering either:
-* a classification model for event participation (though it would have to be a single class model as I don’t have any records for the negative class)
-* a regression model for race volume (though I have much less data from a race perspective, on the order of 100 or so, than participant data, which is up around 17,000)
-* or a clustering and recommender system approach to looking at predicting participation (i.e. recommending future races to participants based on past participation).  This third option is currently my top choice to proceed with.
-I could also apply hypothesis testing to further explore the level of influence of particular factors.
+Given the available data and the lack of explicit information on participant interests, I identified a recommender system using NMF as a good approach to identify the 'best events' without having to know all of the factors that make them the best.  I also considered a classification model for event participation, however the available data is all of the positive class (participated).  Another perspective I considered was a regression model to predict race volume, however bucketing the available data to support such a model would greatly reduce the number of observations I have to work with.
+To address the cold start issue with recommending/predicting future events, instead of using unique EventID for my "item" values I created five Spark Implicit ALS models using repeatable event features (Series, Event Type, Average Mileage, Average Fee, and Venue Location by Zip Code).  These ALS models are aggregated in a Gradient Boosted Ensemble model using SkLearn.  Models were tuned and tested using a train/validate/test data split, grid search, and evaluation using percentile rank (represents how well the model ranks actually attended events in the recommendation lists - lower values indicate a good correlation, with actually attended events high on the list).
+The resultant recommendation lists are used to identify which events show up the most in participants' top recommendations, and to explore trends amongst the set of users for which a given event is highly recommended.  The NMF user-feature and item-feature matrices generated during the ALS model training are also used to perform unsupervised clustering to explore what factors may be most influencing participation and what makes a 'best event'.
 
-### Evaluation
-The company has sufficient data to start with a train/validate/test split in order to quarantine test data for evaluating model performance.  I can use a variety of methods to further evaluate (log loss, reviewing confusion matrix / ROC curves with business understanding, etc if I do classification; will need to get).
+### Results
+When evaluated, each individual ALS model as well as the Gradient Boosted Ensemble perform fairly well in terms of percentile rank.  As a point of comparison I also calculated the percentile rank score if I were to simply recommend the most popular (i.e. most highly attended) races to everyone.  The ALS and Gradient Boost models perform notably better than the popularity approach.  However, currently the individual ALS models are performing better than the ensemble due to each predicting different subsets of the data better.
+The results so far indicate that there is opportunity to increase repeat participation of existing customers (brand loyalty), and opportunities for targeted marketing with the events most frequently highly recommended, and the set of people associated with a particular event in their top recommendations.  I found that race attributes vary quite a bit amongst top recommendations and trends are not clear, so more work is needed in this area before explicit conclusions can be drawn.  In addition to the modeling results, EDA also contributed to these observations.  There is a fair amount of additional EDA that can be performed to answer additional questions MerGeo has raised.
 
 ### Deployment
-Can you specify a minimal viable product (MVP) for presentation and deployment?
-Well-polished Github readme; report to company on my methodology, assumptions, model(s), results, and recommendations for business decisions based on those results; provision of any models themselves for the company to continue to use in the future.
+This project and its results will continue to be documented here on GitHub.  A project site will be added using GitHub Pages in the near future.  In addition, I am preparing a report for MerGeo and will be meeting with them in mid-November to review my work and findings.
+
+### Future Work
+**Modeling:**
+* Investigate alternative ensemble methods that improve upon the individual ALS models
+* Acquire more data to train additional ALS models (race start times, distance from participant home to venue, race sell out)
+**EDA, Clustering:**
+* Participant Geographic Trends
+* Participant Registration Trends
+* Participant Turnover and Factors Driving Repeat Participation
+* Patterns of Participation with respect to season, time, demographics, etc
+* Acquire more participant data to better inform what clusters represent
