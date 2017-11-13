@@ -1,0 +1,1 @@
+{"class":"org.apache.spark.ml.recommendation.ALSModel","timestamp":1509399623699,"sparkVersion":"2.2.0","uid":"ALS_4e6e84eb99850ad1705e","paramMap":{"userCol":"PersonID","itemCol":"Venue_Zip","coldStartStrategy":"drop","predictionCol":"prediction"},"rank":5}
