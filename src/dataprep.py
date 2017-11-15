@@ -184,7 +184,7 @@ class TrailDataPrep(object):
         values but are missing mileage values'''
         dist_dict = {'1/2 Marathon':13., 'Half Marathon early start':13.,
         '5k early start':3., '5 Mile late start': 5., '10k early start':6.,
-        'Half Marathon late start':13., 'Variable-SS':np.NaN}
+        'Half Marathon late start':13., 'Variable-SS':np.NaN, '22 mile':22.}
 
         self.clean_dataset['Miles2'] = self.clean_dataset[['Distance', 'Miles']].apply(
                                     lambda row: row[1] if pd.notnull(row[1]) else dist_dict[row[0]], axis=1)
@@ -349,7 +349,7 @@ class TrailDataPrep(object):
 
     def add_venue_zip_existing(self):
 
-        with open('event_zips_df.pkl', 'rb') as f:
+        with open('../data/event_zips_df.pkl', 'rb') as f:
             event_zips = pickle.load(f)
 
         zips_dict = dict(zip(event_zips['EventID'].values, event_zips['Venue_Zip2'].values))
@@ -357,12 +357,12 @@ class TrailDataPrep(object):
         self.clean_dataset['Venue_Zip'] = self.clean_dataset['EventID'].apply(lambda x: zips_dict[x])
 
 if __name__ == "__main__":
-    dataprep = TrailDataPrep(dbname='mergeoruns101717', host='localhost')
+    dataprep = TrailDataPrep(dbname='mergeoruns110117', host='localhost')
     dataprep.init_psql_session()
     dataprep.data_coll_query()
     dataprep.create_df()
     dataprep.col_cleaning()
     dataprep.engr_features()
     cleaned_df = dataprep.clean_dataset
-    with open ('30OCT17_finalfitmodelsv2/cleaned_df.pkl', 'w') as f:
+    with open ('../data/cleaned_df_01NOV17.pkl', 'w') as f:
         pickle.dump(cleaned_df, f)
