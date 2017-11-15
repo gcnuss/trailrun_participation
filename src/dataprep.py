@@ -244,7 +244,7 @@ class TrailDataPrep(object):
     def clean_contacts(self):
         '''similar to payment method, the contacts column contains a variety of
         oddball entries; bucketing here to Yes, No, and No Response.  Need to
-        follow up with Dan on what the -1 and 0 values mean; for no bucketed in
+        follow up with Dan on what the -1 and 0 values mean; for now bucketed in
         No Response'''
 
         self.clean_dataset['Contact'] = self.clean_dataset[['Contact']].apply(
