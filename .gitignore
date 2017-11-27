@@ -3,6 +3,7 @@ data/*.zip
 data/*.accdb
 data/log.txt
 data/110117log.txt
+data/112417log.txt
 *.ipynb_checkpoints
 *.pyc
 .DS_Store
