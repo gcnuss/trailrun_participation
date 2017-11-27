@@ -144,7 +144,7 @@ class TrailDataPrep(object):
         self.clean_dataset['SeriesID'].fillna(value=0., inplace=True)
         #Series Column, drop as duplicate to SeriesID Column (perfectly co-linear)
         self.clean_dataset.drop('Series', axis=1, inplace=True)
-        #HowHeard Column, drop, not enough data to use (99 out of almost 17000)
+        #HowHeard Column, drop, not enough data to use at this time
         self.clean_dataset.drop('HowHeard', axis=1, inplace=True)
         #Payment method Column
         self.clean_pay_methods()
@@ -243,19 +243,22 @@ class TrailDataPrep(object):
 
     def clean_contacts(self):
         '''similar to payment method, the contacts column contains a variety of
-        oddball entries; bucketing here to Yes, No, and No Response.  Need to
-        follow up with Dan on what the -1 and 0 values mean; for now bucketed in
-        No Response'''
+        entries; bucketing here to Yes, No, and No Response.  -1's are Yes and
+        0's are No per Dan, so bucketed as such.'''
 
         self.clean_dataset['Contact'] = self.clean_dataset[['Contact']].apply(
                                         lambda row: 'No'
-                                        if (row[0] == 'no' or row[0] == 'NO')
+                                        if (row[0] == 'no' or row[0] == 'NO'
+                                        or row[0] == '0')
+                                        else row[0], axis=1)
+        self.clean_dataset['Contact'] = self.clean_dataset[['Contact']].apply(
+                                        lambda row: 'Yes'
+                                        if (row[0] == 'yes' or row[0] == 'YES'
+                                        or row[0] == '-1')
                                         else row[0], axis=1)
         self.clean_dataset['Contact'] = self.clean_dataset[['Contact']].apply(
                                         lambda row: 'No Response'
-                                        if (row[0] == '-1' or row[0] == '0'
-                                        or row[0] == None)
-                                        else row[0], axis=1)
+                                        if row[0] == None else row[0], axis=1)
 
     def clean_series_ids(self):
         '''SeriesID column has separate series numbers for the same series in
@@ -349,20 +352,19 @@ class TrailDataPrep(object):
 
     def add_venue_zip_existing(self):
 
-        with open('../data/event_zips_df.pkl', 'rb') as f:
-            event_zips = pickle.load(f)
+        event_zips = pd.read_csv('../data/events_zip_codes.csv')
 
         zips_dict = dict(zip(event_zips['EventID'].values, event_zips['Venue_Zip2'].values))
 
         self.clean_dataset['Venue_Zip'] = self.clean_dataset['EventID'].apply(lambda x: zips_dict[x])
 
 if __name__ == "__main__":
-    dataprep = TrailDataPrep(dbname='mergeoruns110117', host='localhost')
+    dataprep = TrailDataPrep(dbname='mergeodb112417', host='localhost')
     dataprep.init_psql_session()
     dataprep.data_coll_query()
     dataprep.create_df()
     dataprep.col_cleaning()
     dataprep.engr_features()
     cleaned_df = dataprep.clean_dataset
-    with open ('../data/cleaned_df_01NOV17.pkl', 'w') as f:
+    with open ('../data/cleaned_df_24NOV17.pkl', 'w') as f:
         pickle.dump(cleaned_df, f)
