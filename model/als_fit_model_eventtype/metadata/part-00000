@@ -1,1 +1,1 @@
-{"class":"org.apache.spark.ml.recommendation.ALSModel","timestamp":1509393100990,"sparkVersion":"2.2.0","uid":"ALS_4c66847e297b1c876e36","paramMap":{"itemCol":"EventTypeID","coldStartStrategy":"drop","userCol":"PersonID","predictionCol":"prediction"},"rank":30}
+{"class":"org.apache.spark.ml.recommendation.ALSModel","timestamp":1511824003434,"sparkVersion":"2.2.0","uid":"ALS_4b48bfe3fe164516f867","paramMap":{"userCol":"PersonID","coldStartStrategy":"drop","itemCol":"EventTypeID","predictionCol":"prediction"},"rank":30}

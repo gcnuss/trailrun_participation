@@ -64,7 +64,7 @@ class TrailDataPrep(object):
             mt."Tshirt", mt."Hoodie", mt."Event_Name", mt."Event_Date", mt."MergeoEvent",
             mt."EventTypeID", et."EventType", mt."SeriesID", s."Series", sstp."HowHeard"
             FROM master_temp mt
-            LEFT JOIN "DistanceSorts" ds ON LOWER(mt."Distance") = LOWER(ds."Distance")
+            LEFT JOIN "Distances" ds ON LOWER(mt."Distance") = LOWER(ds."Distance")
             LEFT JOIN "EventTypes" et ON mt."EventTypeID" = et."EventTypeID"
             LEFT JOIN "Persons" p ON p."PersonID" = mt."PersonID"
             LEFT JOIN "SS_TeamPeople" sstp ON mt."PersonID" = sstp."PersonID"

@@ -1,1 +1,1 @@
-{"class":"org.apache.spark.ml.recommendation.ALSModel","timestamp":1509399623699,"sparkVersion":"2.2.0","uid":"ALS_4e6e84eb99850ad1705e","paramMap":{"userCol":"PersonID","itemCol":"Venue_Zip","coldStartStrategy":"drop","predictionCol":"prediction"},"rank":5}
+{"class":"org.apache.spark.ml.recommendation.ALSModel","timestamp":1511824415923,"sparkVersion":"2.2.0","uid":"ALS_4c1caeb5fc31f2728782","paramMap":{"userCol":"PersonID","itemCol":"Venue_Zip","predictionCol":"prediction","coldStartStrategy":"drop"},"rank":5}

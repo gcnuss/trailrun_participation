@@ -1,1 +1,1 @@
-{"class":"org.apache.spark.ml.recommendation.ALSModel","timestamp":1509400495219,"sparkVersion":"2.2.0","uid":"ALS_49ce9a544f6a7c201088","paramMap":{"coldStartStrategy":"drop","predictionCol":"prediction","userCol":"PersonID","itemCol":"Miles2_Avg"},"rank":5}
+{"class":"org.apache.spark.ml.recommendation.ALSModel","timestamp":1511825246789,"sparkVersion":"2.2.0","uid":"ALS_4cf08a58a64bb5206c42","paramMap":{"itemCol":"Miles2_Avg","coldStartStrategy":"drop","predictionCol":"prediction","userCol":"PersonID"},"rank":5}

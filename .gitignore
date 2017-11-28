@@ -13,3 +13,5 @@ model/24OCT17_pipelinerun/
 model/25OCT17_repeatablefeaturesrun/
 model/26OCT17_finalfitmodels/
 model/30OCT17_finalfitmodelsv2/
+data/cleaned_df_24NOV17.pkl
+model/24NOV17_dbupdatemodels/
