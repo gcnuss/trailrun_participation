@@ -4,6 +4,7 @@ data/*.accdb
 data/log.txt
 data/110117log.txt
 data/112417log.txt
+data/032218log.txt
 *.ipynb_checkpoints
 *.pyc
 .DS_Store
@@ -14,4 +15,5 @@ model/25OCT17_repeatablefeaturesrun/
 model/26OCT17_finalfitmodels/
 model/30OCT17_finalfitmodelsv2/
 data/cleaned_df_24NOV17.pkl
+data/cleaned_df_22MAR18.pkl
 model/24NOV17_dbupdatemodels/
